@@ -88,13 +88,12 @@ def callRestApiPeriodically():
         time.sleep(interval)      
 
 def main():
-    t = threading.Thread(target=callRestApiPeriodically)
-    t.daemon = True
-    t.start()
-    
+    while True:
+        responseDict = getXMLResponse()
+        if responseDict['isError'] == False:
+            dataDict = getDataFromXML(responseDict['data'])
+            print dataDict
     
 if __name__ == '__main__':
     main()
-    while True:
-        #print 'Hello'
-        i = 1
+    
