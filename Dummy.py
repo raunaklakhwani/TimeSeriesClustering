@@ -5,6 +5,8 @@ import sys
 import threading
 from bs4 import BeautifulSoup
 from datetime import datetime
+import csv
+from Main import macDict
 
 URL = "http://ctaoapp.cisco.com:8070/api/contextaware/v1/location/clients"
 username = "learning"
@@ -13,7 +15,7 @@ interval = 1
 
 def getDataFromXML(xml):
     dataDict = {}
-    xmlFormat = BeautifulSoup(xmlString)
+    xmlFormat = BeautifulSoup(xml)
     mobileDevicesList = []
     dataDict['width'] = xmlFormat.locations.wirelessclientlocation.mapinfo.dimension['width']
     dataDict['height'] = xmlFormat.wirelessclientlocation.mapinfo.dimension['height']
@@ -59,13 +61,22 @@ def getXMLResponse():
 
 
 
+def generateCsv():
+    with open("abc.csv","wb") as f:
+        writer = csv.writer(f,delimiter = ",")
+        writer.writerow(["index","macaddess","x","y","row","col","firstlocatedtime","lastlocatedtime"])
+    for index,macList in macDict.items():
+        deviceInfo = macList[len(macList) - 1]
+        writer.writerow([deviceInfo.index,deviceInfo.macaddress,deviceInfo.x,deviceInfo.y,deviceInfo.block[0],deviceInfo.block[1],deviceInfo.firstlocatedtime,deviceInfo.lastlocatedtime])
+        
+
 
 
 if __name__ == '__main__':
-    responseDict = getXMLResponse()
-    xmlString = responseDict['data']
-    xmlFormat = BeautifulSoup(xmlString)
-    a = getDataFromXML(xmlString)
     print 'Hello'
+    with open("abc.csv","wb") as f:
+        writer = csv.writer(f,delimiter = ",")
+        writer.writerow(['a','b','c','d'])
+    
     
     

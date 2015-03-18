@@ -6,12 +6,41 @@ import threading
 from bs4 import BeautifulSoup
 from datetime import datetime
 from DeviceInfo import DeviceInfo
+import math
+import csv
 
 URL = "http://ctaoapp.cisco.com:8070/api/contextaware/v1/location/clients"
 username = "learning"
 password = "learning"
 interval = 5
+machineIndex = 0
+machineIndexDict = {}
 macDict = {}
+lengthOfEachCell = 10
+widthOfEachCell = 10
+width = None
+height = None
+length = None
+thresholdDistance = 2
+
+def getIndexFromMachineIndexDict(macaddress):
+    global machineIndex
+    if machineIndexDict.get(macaddress) is None:
+        machineIndexDict[macaddress] = machineIndex
+        index = machineIndex
+        machineIndex = machineIndex + 1
+    else :
+        index = machineIndexDict[macaddress]
+    
+    return index
+
+def getBlock(x, y):
+    '''
+    Returns the block info(in the form of tuple) on the basis of x and y coordinate
+    '''
+    row = int(math.ceil(float(x) / lengthOfEachCell))
+    col = int(math.ceil(float(y) / widthOfEachCell))
+    return (row, col)
 
 
 def getDataFromXML(xml):
@@ -19,31 +48,35 @@ def getDataFromXML(xml):
     Gets the parameter from the xml data and returns the dict with four keys in it. 
     Height, Width, Length, mobileDevicesList
     '''
+    global width, height, length
     dataDict = {}
     xmlFormat = BeautifulSoup(xml)
-    mobileDevicesList = []
-    dataDict['width'] = xmlFormat.locations.wirelessclientlocation.mapinfo.dimension['width']
-    dataDict['height'] = xmlFormat.wirelessclientlocation.mapinfo.dimension['height']
-    dataDict['length'] = xmlFormat.wirelessclientlocation.mapinfo.dimension['length']
-    for wirelessclientlocation in xmlFormat.find_all("wirelessclientlocation"):
-        mobileDeviceDict = {}
-        mobileDeviceDict['x'] = wirelessclientlocation.mapcoordinate['x']
-        mobileDeviceDict['y'] = wirelessclientlocation.mapcoordinate['y']
-        mobileDeviceDict['macaddress'] = wirelessclientlocation['macaddress']
-        mobileDeviceDict['firstlocatedtime'] = parseDate(wirelessclientlocation.statistics['firstlocatedtime'])
-        mobileDeviceDict['lastlocatedtime'] = parseDate(wirelessclientlocation.statistics['lastlocatedtime'])
-        mobileDevicesList.append(mobileDeviceDict)
+    if width is None:
+        width = xmlFormat.locations.wirelessclientlocation.mapinfo.dimension['width']
+    if height is None:
+        height = xmlFormat.locations.wirelessclientlocation.mapinfo.dimension['height']
+    if length is None:    
+        length = xmlFormat.locations.wirelessclientlocation.mapinfo.dimension['length']
         
-        deviceInfo = DeviceInfo(mobileDeviceDict['x'], mobileDeviceDict['y'], mobileDeviceDict['macaddress'], mobileDeviceDict['firstlocatedtime'], mobileDeviceDict['lastlocatedtime'])
-        deviceInfoObject = macDict.get(mobileDeviceDict['macaddress'])
-        if deviceInfoObject is None:
-            macDict[mobileDeviceDict['macaddress']] = deviceInfo
-        elif deviceInfo == deviceInfoObject : 
-            macDict[mobileDeviceDict['macaddress']] = deviceInfo
+    for wirelessclientlocation in xmlFormat.find_all("wirelessclientlocation"):
+        
+        macaddress = wirelessclientlocation['macaddress']
+        index = getIndexFromMachineIndexDict(macaddress)
             
-    dataDict['mobileDevicesList'] = mobileDevicesList
-    return dataDict
-    
+        x = wirelessclientlocation.mapcoordinate['x']
+        y = wirelessclientlocation.mapcoordinate['y']
+        macaddress = wirelessclientlocation['macaddress']
+        firstlocatedtime = parseDate(wirelessclientlocation.statistics['firstlocatedtime'])
+        lastlocatedtime = parseDate(wirelessclientlocation.statistics['lastlocatedtime'])
+        block = getBlock(x, y)
+        
+        deviceInfo = DeviceInfo(x, y, macaddress, firstlocatedtime, lastlocatedtime, index, block)
+        deviceInfoObject = macDict.get(index)
+        if deviceInfoObject is None:
+            macDict[index] = [{"data":deviceInfo}]
+        else :
+            macDict[index].append({"data":deviceInfo})
+       
         
 def parseDate(stringDate):
     '''
@@ -73,26 +106,23 @@ def getXMLResponse():
         print e
     
     return responseDict
-    
-        
-def callRestApiPeriodically():
-    '''
-    Calls the rest api Periodically
-    '''
-    while True:
-        responseDict = getXMLResponse()
-        #print responseDict
-        if responseDict['isError'] == False:
-            dataDict = getDataFromXML(responseDict['data'])
-            print dataDict
-        time.sleep(interval)      
 
+def generateCsv():
+    with open("/Users/ronaklakhwani/abc.csv", "w+") as f:
+        writer = csv.writer(f, delimiter=",")
+        writer.writerow(["index", "macaddess", "x", "y", "row", "col", "firstlocatedtime", "lastlocatedtime"])
+        for index, macList in macDict.items():
+            deviceInfo = macList[len(macList) - 1]['data']
+            writer.writerow([deviceInfo.index, deviceInfo.macaddress, deviceInfo.x, deviceInfo.y, deviceInfo.block[0], deviceInfo.block[1], deviceInfo.firstlocatedtime, deviceInfo.lastlocatedtime])
+        
+    
 def main():
     while True:
         responseDict = getXMLResponse()
         if responseDict['isError'] == False:
-            dataDict = getDataFromXML(responseDict['data'])
-            print dataDict
+            getDataFromXML(responseDict['data'])
+            print macDict
+            generateCsv()
     
 if __name__ == '__main__':
     main()
