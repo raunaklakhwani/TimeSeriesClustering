@@ -1,13 +1,17 @@
 from urllib2 import Request, urlopen, URLError
 import urllib2
 import time
-import sys
-import threading
 from bs4 import BeautifulSoup
 from datetime import datetime
 from DeviceInfo import DeviceInfo
 import math
 import csv
+import numpy
+from sklearn.cluster import KMeans
+import plotly.plotly as py
+import plotly.tools as tls
+from plotly.graph_objs import *
+import random
 
 URL = "http://ctaoapp.cisco.com:8070/api/contextaware/v1/location/clients"
 username = "learning"
@@ -24,8 +28,87 @@ width = None
 height = None
 length = None
 thresholdDistance = 2
+numClusters = 8
+stream_id = None
+
+def doPlotConfiguration():
+    global stream_id
+    py.sign_in('raunaklakhwani','pbbmsi2kfy')
+    tls.set_credentials_file(username="raunaklakhwani", 
+                                 api_key="pbbmsi2kfy")
+    tls.set_credentials_file(stream_ids=[
+            "dnseotxru0"
+        ])
+    stream_ids = tls.get_credentials_file()['stream_ids']
+
+    # Get stream id from stream id list 
+    stream_id = stream_ids[0]
+    # Make instance of stream id object 
+    stream = Stream(
+        token=stream_id  # (!) link stream id to 'token' key
+    )
+    
+    # Initialize trace of streaming plot by embedding the unique stream_id
+    trace1 = Scatter(
+        x=[],
+        y=[],
+        mode='markers',
+        stream=stream,
+        marker = Marker(color = "yellow")
+    )
+    data = Data([trace1])
+    layout = Layout(
+                showlegend = False,
+                autosize = True,
+                height = 800,
+                width = 800,
+                title = "MAP",
+                xaxis=XAxis(
+                    zerolinewidth = 4,
+                    gridwidth = 1,
+                    showgrid = True,
+                    zerolinecolor = "#969696",
+                    gridcolor = "#bdbdbd",
+                    linecolor = "#636363",
+                    mirror = True,
+                    zeroline = False,
+                    showline = True,
+                    linewidth = 6,
+                    type = "linear",
+                    range = [0,300],
+                    autorange = False,
+                    autotick = False,
+                    dtick = 15,
+                    tickangle = -45,
+                    title = "X co-ordinate"
+                    ),
+                yaxis=YAxis(
+                    zerolinewidth = 4,
+                    gridwidth = 1,
+                    showgrid = True,
+                    zerolinecolor = "#969696",
+                    gridcolor = "#bdbdbd",
+                    linecolor = "#636363",
+                    mirror = True,
+                    zeroline = False,
+                    showline = True,
+                    linewidth = 6,
+                    type = "linear",
+                    range = [300,0],
+                    autorange = False,
+                    autotick = False,
+                    dtick = 15,
+                    tickangle = -45,
+                    title = "Y co-ordinate"    
+                    )
+                )
+    fig = Figure(data=data, layout=layout)
+    plot_url = py.plot(fig, filename='axes-lines')
 
 def getIndexFromMachineIndexDict(macaddress):
+    '''
+    Get the index from the machineIndexdict for the corresponding mac address 
+    '''
     global machineIndex
     if machineIndexDict.get(macaddress) is None:
         machineIndexDict[macaddress] = machineIndex
@@ -33,7 +116,6 @@ def getIndexFromMachineIndexDict(macaddress):
         machineIndex = machineIndex + 1
     else :
         index = machineIndexDict[macaddress]
-    
     return index
 
 def getBlock(x, y):
@@ -46,7 +128,6 @@ def getBlock(x, y):
     #col = int(math.ceil(float(x) / lengthOfEachCell))
     #row = int(math.ceil(float(y) / widthOfEachCell))
     return (row, col)
-
 
 def getDataFromXML(xml):
     '''
@@ -82,18 +163,12 @@ def getDataFromXML(xml):
         
         deviceInfo = DeviceInfo(x, y, macaddress, firstlocatedtime, lastlocatedtime, index, block, blockNumber)
         deviceInfoObject = macDict.get(index)
-        dataDict.setdefault("data",[]).append(deviceInfo)
         if deviceInfoObject is None:
             macDict[index] = [{"data":deviceInfo}]
         else :
             macDict[index].append({"data":deviceInfo})
             
-    dataDict["width"] = width
-    dataDict["height"] = height
-    dataDict["length"] = length
-    return dataDict
-       
-        
+
 def parseDate(stringDate):
     '''
     Gets the date in the string format 2015-03-17T00:27:33.437+0000 and converts it into 2015-03-17 00:27:33 and then returns the date_object
@@ -123,24 +198,42 @@ def getXMLResponse():
     
     return responseDict
 
-def generateCsv():
-    with open("/Users/ronaklakhwani/WebstormProjects/OutputTimeClustering/abc.csv", "wb") as f:
-        writer = csv.writer(f, delimiter=",")
-        writer.writerow(["index", "macaddess", "x", "y", "row", "col", "blockNumber", "firstlocatedtime", "lastlocatedtime"])
-        for index, macList in macDict.items():
-            deviceInfo = macList[len(macList) - 1]['data']
-            writer.writerow([deviceInfo.index, deviceInfo.macaddress, deviceInfo.x, deviceInfo.y, deviceInfo.block[0], deviceInfo.block[1], deviceInfo.blockNumber, deviceInfo.firstlocatedtime, deviceInfo.lastlocatedtime])
-        
-    
 def main():
+    doPlotConfiguration()
     while True:
         responseDict = getXMLResponse()
         if responseDict['isError'] == False:
             getDataFromXML(responseDict['data'])
             print macDict
-            generateCsv()
-            time.sleep(60)
+            generateGraph()
+            #generateCsv()
+            time.sleep(5)
+            print "Done"
+            
+def colorGenerator():
+    def r():
+        hexRandom = hex(random.randint(0, 255))[2:]
+        return hexRandom if len(hexRandom) >= 2 else hexRandom + "0"
+    return "#" + r()+ r() + r()
+            
+def generateGraph():
+    d = [(deviceInfoList[-1]['data'].x, deviceInfoList[-1]['data'].y) for index,deviceInfoList in macDict.items()]
+    textList = [deviceInfoList[-1]['data'].macaddress for index,deviceInfoList in macDict.items()]
+    ar = numpy.array(d)
+    k = KMeans(n_clusters=numClusters)
+    k.fit(ar)
+    X = [i[0] for i in d]
+    Y = [i[1] for i in d]
+    color = [colorGenerator() for i in range(len(X))]
+    labels = k.labels_
+    finalColors = [color[i] for i in labels]
+    
+    s = py.Stream(stream_id)
+    s.open()
+    s.write(Scatter(x=X, y=Y, text = textList, marker = Marker(color = finalColors)))
+    print zip(labels,finalColors)
+    s.close()
     
 if __name__ == '__main__':
     main()
-    
+    print 'Hello'

@@ -1,5 +1,5 @@
 class DeviceInfo:
-    def __init__(self, x, y, macaddress, firstlocatedtime, lastlocatedtime,index, block):
+    def __init__(self, x, y, macaddress, firstlocatedtime, lastlocatedtime,index, block, blockNumber):
         self.x = x
         self.y = y
         self.macaddress = macaddress
@@ -7,6 +7,7 @@ class DeviceInfo:
         self.lastlocatedtime = lastlocatedtime
         self.index = index
         self.block = block
+        self.blockNumber = blockNumber
         
     def __eq__(self,other):
         return self.x == other.x and self.y == other.y and self.lastlocatedtime == other.lastlocatedtime and self.firstlocatedtime == other.firstlocatedtime
