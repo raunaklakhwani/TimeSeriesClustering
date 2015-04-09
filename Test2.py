@@ -20,6 +20,7 @@ password = "learning"
 interval = 5
 machineIndex = 0
 machineIndexDict = {}
+macAddressDict = {}
 macDict = {}
 lengthOfEachCell = 15
 widthOfEachCell = 15
@@ -187,7 +188,9 @@ def getDataFromXML(xml):
         
         macaddress = wirelessclientlocation['macaddress']
         index = getIndexFromMachineIndexDict(macaddress)
-            
+
+        macAddressDict.setdefault(index,macaddress)
+
         x = wirelessclientlocation.mapcoordinate['x']
         y = wirelessclientlocation.mapcoordinate['y']
         macaddress = wirelessclientlocation['macaddress']
@@ -250,7 +253,7 @@ def main():
             print macDict
             generateGraph(dataDict['data'])
             #generateCsv()
-            #time.sleep(1)
+            #time.sleep(5)
             print "Done"
 
 def identifyStaticDevices(devices):
@@ -311,7 +314,7 @@ def generateGraph(data):
     
     static_d = [(stats.x,stats.y) for index,stats in staticDevices.items() if data.get(index) is not None]
     if len(static_d) > 0:
-        static_textList = [index for index,stats in staticDevices.items() if data.get(index) is not None]
+        static_textList = [macAddressDict[index] for index,stats in staticDevices.items() if data.get(index) is not None]
         static_X = [i[0] for i in static_d]
         static_Y = [i[1] for i in static_d]
         static_scatter = Scatter(x=static_X, y=static_Y, text = static_textList)
@@ -320,7 +323,7 @@ def generateGraph(data):
         
     dynamic_d = [(stats.x,stats.y) for index,stats in dynamicDevices.items() if data.get(index) is not None]
     if len(dynamic_d) > 0:
-        dynamic_textList = [index for index,stats in dynamicDevices.items() if data.get(index) is not None]
+        dynamic_textList = [macAddressDict[index] for index,stats in dynamicDevices.items() if data.get(index) is not None]
         ar = numpy.array(dynamic_d)
         k = KMeans(n_clusters=numClusters)
         k.fit(ar)
@@ -329,7 +332,8 @@ def generateGraph(data):
         color = [colorGenerator() for i in range(len(dynamic_X))]
         print dynamic_X,dynamic_Y,color,k.labels_,dynamic_d
         labels = k.labels_
-        finalColors = [color[i] for i in labels]
+        #finalColors = [color[i] for i in labels]
+        finalColors = ["#000000" for i in labels]
         dynamic_scatter = Scatter(x=dynamic_X, y=dynamic_Y, text = dynamic_textList, marker = Marker(color = finalColors))
         dynamicStream.write(dynamic_scatter)
         print zip(labels,finalColors)
